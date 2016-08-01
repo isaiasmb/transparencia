@@ -5,9 +5,12 @@
  */
 package parseadortransparencia;
 
+import java.io.File;
 import java.net.URI;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -23,6 +26,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import parseador.http.HttpContainer;
 
 /**
  *
@@ -42,30 +46,36 @@ public class ParseadorTransparencia {
         CloseableHttpClient httpClient = HttpClients.custom()
                 .setDefaultCookieStore(cookieStore)
                 .build();
-
-        String conteudoPagina = realizarFiltro(httpClient, httpContext);
+        
+        HttpContainer httpContainer = new HttpContainer(httpClient, httpContext);
+        
+        String conteudoPagina = realizarFiltro(httpContainer);
         Integer ultimaPaginaResultado = encontrarUltimaPagina(conteudoPagina);
-        /*
+        
         List<String> listaLinksDocumentos = new ArrayList<>();
         for (int i=1; i <= ultimaPaginaResultado; i++) {
             System.out.println("---> " + i);
             listaLinksDocumentos = buscarDocumentosDaPagina(httpClient, httpContext, i);
-            
             for (String linkDocumento : listaLinksDocumentos) {
-               parsearDetalhesDocumento(httpClient, httpContext, linkDocumento);  
+              System.out.println("-----> " + linkDocumento);
+              String linha =  parsearDetalhesDocumento(httpContainer, linkDocumento);
+               FileUtils.writeStringToFile(new File("D:\\teste.csv"), linha.trim(),Charset.forName("utf-8"), true);
+              System.out.println(linha.trim());
+              Thread.sleep(2000);
             }
             //parsearDetalhesDocumento(httpClient, httpContext, "http://www.portaltransparencia.gov.br/despesasdiarias/empenho?documento=153045152242016NE000681");
-        */
-        
-        
-        String linha = parsearDetalhesDocumento(httpClient, httpContext, "http://www.portaltransparencia.gov.br/despesasdiarias/empenho?documento=153045152242016NE000681");
-        System.out.println(linha);
+        }
+       // String linha = parsearDetalhesDocumento(httpContainer, "http://www.portaltransparencia.gov.br/despesasdiarias/empenho?documento=153045152242016NE000681");
+        //System.out.println(linha);
         
     }
     
-    public static String realizarFiltro(CloseableHttpClient httpClient, HttpContext httpContext) throws Exception {
+    public static String realizarFiltro(HttpContainer httpContainer) throws Exception {
         String urlNumPaginas = "http://www.portaltransparencia.gov.br/despesasdiarias/resultado";
         String fontePagina = "";
+        
+        CloseableHttpClient httpClient = httpContainer.getHttpClient();
+        HttpContext httpContext = httpContainer.getHttpContext();
         HttpGet httpGet = null;
         
         try {
@@ -74,7 +84,7 @@ public class ParseadorTransparencia {
             builder.setScheme("http").setHost("www.portaltransparencia.gov.br").setPath("/despesasdiarias/resultado")
                 .setParameter("consulta", "avancada")
                 .setParameter("periodoInicio", "01/07/2016")
-                .setParameter("periodoFim", "30/07/2016")
+                .setParameter("periodoFim", "20/07/2016")
                 .setParameter("fase", "EMP")
                 .setParameter("codigoOS", "52000")
                 .setParameter("codigoOrgao", "52121")
@@ -113,7 +123,7 @@ public class ParseadorTransparencia {
         try {
             numMaxPagina = Integer.parseInt(numMaxPaginaStr);
         } catch (NumberFormatException ex) {
-            ex.printStackTrace();
+            throw new Exception(ex);
         }
         
         return numMaxPagina;
@@ -155,9 +165,12 @@ public class ParseadorTransparencia {
   }
   
   
-  public static String parsearDetalhesDocumento(CloseableHttpClient httpClient, HttpContext httpContext, String linkDocumento) throws Exception {
-      
+  public static String parsearDetalhesDocumento(HttpContainer httpContainer, String linkDocumento) throws Exception {
+    
+    CloseableHttpClient httpClient = httpContainer.getHttpClient();
+    HttpContext httpContext = httpContainer.getHttpContext();
     HttpGet httpGet = null;
+    
     String linha = "";
     try {
         httpGet = new HttpGet(linkDocumento);
