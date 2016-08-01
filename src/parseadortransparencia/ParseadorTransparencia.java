@@ -9,6 +9,7 @@ import java.io.File;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
@@ -53,16 +54,25 @@ public class ParseadorTransparencia {
         Integer ultimaPaginaResultado = encontrarUltimaPagina(conteudoPagina);
         
         List<String> listaLinksDocumentos = new ArrayList<>();
+        List<String> listaDespesasDocumento = new ArrayList<>();
         for (int i=1; i <= ultimaPaginaResultado; i++) {
+            listaDespesasDocumento = new ArrayList<>();
             System.out.println("---> " + i);
             listaLinksDocumentos = buscarDocumentosDaPagina(httpClient, httpContext, i);
             for (String linkDocumento : listaLinksDocumentos) {
               System.out.println("-----> " + linkDocumento);
               String linha =  parsearDetalhesDocumento(httpContainer, linkDocumento);
-               FileUtils.writeStringToFile(new File("D:\\teste.csv"), linha.trim(),Charset.forName("utf-8"), true);
-              System.out.println(linha.trim());
-              Thread.sleep(2000);
+             //  FileUtils.writeStringToFile(new File("D:\\teste.csv"), linha.trim(),Charset.forName("utf-8"), true);
+               listaDespesasDocumento.addAll(Arrays.asList(linha.split("-###EOL###-")));
+             // System.out.println(linha.trim());
+              Thread.sleep(1000);
             }
+            
+            for (String a : listaDespesasDocumento) {
+              System.out.println(a);
+              
+            }
+            FileUtils.writeLines(new File("D:\\teste.csv"), "ISO8859_1", listaDespesasDocumento, true);
             //parsearDetalhesDocumento(httpClient, httpContext, "http://www.portaltransparencia.gov.br/despesasdiarias/empenho?documento=153045152242016NE000681");
         }
        // String linha = parsearDetalhesDocumento(httpContainer, "http://www.portaltransparencia.gov.br/despesasdiarias/empenho?documento=153045152242016NE000681");
@@ -191,15 +201,18 @@ public class ParseadorTransparencia {
         for (Element campo : campos) {
             if (i % 5 == 0) {
                 linha = linha.trim();
-                if (linha.endsWith(",")) {
+                if (linha.endsWith(";")) {
                     linha = linha.substring(0, linha.length() -1);
                 }
-                linha += "\n\r";
+                //linha += "\n\r";
+                if (i != 0) {
+                  linha += "-###EOL###-";
+                }
             }
-            linha += StringEscapeUtils.unescapeHtml4("\"" + campo.html() + "\"") + ",";
+            linha += StringEscapeUtils.unescapeHtml4("\"" + campo.html() + "\"") + ";";
             i++;
         }
-        if (linha.endsWith(",")) {
+        if (linha.endsWith(";")) {
             linha = linha.substring(0, linha.length() -1);
         }  
     } finally {
