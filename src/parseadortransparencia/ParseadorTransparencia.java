@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.swing.JOptionPane;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -49,6 +50,7 @@ public class ParseadorTransparencia {
     private static HttpContainer httpContainer;
     private static CloseableHttpClient httpClient;
     private static HttpContext httpContext;
+    private static String nomeArquivo;
 
     public static void execute(Map<String, String> map) throws Exception {
         BasicCookieStore cookieStore = new BasicCookieStore();
@@ -224,6 +226,9 @@ public class ParseadorTransparencia {
         codigoUG = (map.get("codigoUG") == null || map.get("codigoUG").equals("") ? "TOD" : map.get("codigoUG"));
         codigoED = map.get("codigoED");
         codigoFavorecido = (map.get("codigoFavorecido") == null ? "" : map.get("codigoFavorecido"));
+        nomeArquivo = (map.get("nomeArquivo") == null || map.get("nomeArquivo").equals("") ? "novoArquivo" : map.get("nomeArquivo"));
+        System.out.println("Nome do arquivo depois de enviar: " + map.get("nomeArquivo"));
+        System.out.println("Nome do arquivo depois de enviar armazenado: " + nomeArquivo);
     }
 
     private static int processaData() throws ParseException {
@@ -264,10 +269,11 @@ public class ParseadorTransparencia {
         Integer ultimaPaginaResultado = encontrarUltimaPagina(conteudoPagina);
         System.out.println("Quantidade de páginas: " + encontrarUltimaPagina(conteudoPagina));
         List<String> listaLinksDocumentos;
-        List<String> listaDespesasDocumento;
+        List<String> listaDespesasDocumento = new ArrayList<>();
+        
+        listaDespesasDocumento.add("Subitem da Despesa;Quantidade;Valor Unitário (R$);Valor Total (R$);Descrição");
 
         for (int i = 1; i <= ultimaPaginaResultado; i++) {
-            listaDespesasDocumento = new ArrayList<>();
             System.out.println("---> " + i);
             listaLinksDocumentos = buscarDocumentosDaPagina(httpClient, httpContext, i);
             for (String linkDocumento : listaLinksDocumentos) {
@@ -275,12 +281,19 @@ public class ParseadorTransparencia {
                 String linha = parsearDetalhesDocumento(httpContainer, linkDocumento);
                 listaDespesasDocumento.addAll(Arrays.asList(linha.split("-###EOL###-")));
                 Thread.sleep(1000);
-            }
-
+            }           
+            
             for (String a : listaDespesasDocumento) {
                 System.out.println(a);
             }
-            FileUtils.writeLines(new File("teste.csv"), "UTF-8", listaDespesasDocumento, true);
+            
+            if(listaDespesasDocumento.size() == 1) {
+                JOptionPane.showMessageDialog(null, "Essa consulta não retornou nenhum resultado.", "Sem resultados", JOptionPane.INFORMATION_MESSAGE);
+            } else {               
+                FileUtils.writeLines(new File(nomeArquivo + ".csv"), "UTF-8", listaDespesasDocumento, true);
+                JOptionPane.showMessageDialog(null, "Arquivo gerado com sucesso!", "Arquivo gerado", JOptionPane.INFORMATION_MESSAGE);
+            }
+                
         }
     }
 }

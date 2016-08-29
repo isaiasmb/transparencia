@@ -39,6 +39,8 @@ public class JanelaApp extends Application {
     private ComboBox<String> elementoDespesaCombo;
     private Label favorecidoLabel;
     private TextField favorecido;
+    private Label nomeArquivoLabel;
+    private TextField nomeArquivo;
     private Button consultar;
     private Button limparCampos;
 
@@ -84,6 +86,10 @@ public class JanelaApp extends Application {
 
         favorecidoLabel = new Label("Favorecido:");
         favorecido = new TextField();
+        
+        nomeArquivoLabel = new Label("Nome do arquivo: ");
+        nomeArquivo = new TextField();
+        nomeArquivo.setPromptText("Opcional");
 
         consultar = new Button("Consultar");
         consultar.setOnAction(e -> consultar());
@@ -93,7 +99,8 @@ public class JanelaApp extends Application {
 
         pane.getChildren().addAll(periodoLabel, periodoInicio, periodoFim, orgaoSuperiorLabel, orgaoSuperior,
                 orgaoEntidadeVinculadaLabel, orgaoEntidadeVinculada, unidadeGestora, unidadeGestoraLabel,
-                elementoDespesaCombo, elementoDespesaLabel, favorecido, favorecidoLabel, consultar, limparCampos);
+                elementoDespesaCombo, elementoDespesaLabel, favorecido, favorecidoLabel, nomeArquivoLabel, nomeArquivo, 
+                consultar, limparCampos);
     }
 
     private void initLayout() {
@@ -128,9 +135,14 @@ public class JanelaApp extends Application {
         favorecidoLabel.setLayoutY(elementoDespesaLabel.getLayoutY() + 40);
         favorecido.setLayoutX(elementoDespesaCombo.getLayoutX());
         favorecido.setLayoutY(elementoDespesaCombo.getLayoutY() + 40);
+        
+        nomeArquivoLabel.setLayoutX(favorecidoLabel.getLayoutX());
+        nomeArquivoLabel.setLayoutY(favorecidoLabel.getLayoutY() + 40);
+        nomeArquivo.setLayoutX(favorecido.getLayoutX());
+        nomeArquivo.setLayoutY(favorecido.getLayoutY() + 40);
 
-        consultar.setLayoutX(favorecido.getLayoutX());
-        consultar.setLayoutY(favorecido.getLayoutY() + 40);
+        consultar.setLayoutX(nomeArquivo.getLayoutX());
+        consultar.setLayoutY(nomeArquivo.getLayoutY() + 40);
 
         limparCampos.setLayoutX(consultar.getLayoutX() + consultar.getWidth() + 15);
         limparCampos.setLayoutY(consultar.getLayoutY());
@@ -147,7 +159,10 @@ public class JanelaApp extends Application {
             map.put("codigoUG", unidadeGestora.getText());
             map.put("codigoED", getValue(elementosDespesaMap, elementoDespesaCombo));
             map.put("codigoFavorecido", favorecido.getText());
-
+            map.put("nomeArquivo", nomeArquivo.getText());
+            System.out.println("Nome do favorecido antes de enviar: " + favorecido.getText());
+            System.out.println("Nome do arquivo antes de enviar: " + nomeArquivo.getText());
+           
             ParseadorTransparencia.execute(map);
         } catch (Exception ex) {
             Logger.getLogger(JanelaApp.class.getName()).log(Level.SEVERE, null, ex);
