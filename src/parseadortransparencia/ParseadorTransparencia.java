@@ -9,6 +9,8 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JOptionPane;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
@@ -36,56 +38,70 @@ import parseador.http.HttpContainer;
  *
  * @author bruno
  */
-public class ParseadorTransparencia {
+public class ParseadorTransparencia implements Runnable {
 
-    private static String periodoInicio;
-    private static String periodoFim;
-    private static String codigoOS;
-    private static String codigoOrgao;
-    private static String codigoUG;
-    private static String codigoED;
-    private static String codigoFavorecido;
-    private static Map<Integer, String> dataInicialMap = new LinkedHashMap<>();
-    private static Map<Integer, String> dataFinalMap = new LinkedHashMap<>();
-    private static HttpContainer httpContainer;
-    private static CloseableHttpClient httpClient;
-    private static HttpContext httpContext;
-    private static String nomeArquivo;
+    private String periodoInicio;
+    private String periodoFim;
+    private String codigoOS;
+    private String codigoOrgao;
+    private String codigoUG;
+    private String codigoED;
+    private String codigoFavorecido;
+    private Map<Integer, String> dataInicialMap = new LinkedHashMap<>();
+    private Map<Integer, String> dataFinalMap = new LinkedHashMap<>();
+    private HttpContainer httpContainer;
+    private CloseableHttpClient httpClient;
+    private HttpContext httpContext;
+    private String nomeArquivo;
+    private Map<String, String> map;
 
-    public static void execute(Map<String, String> map) throws Exception {
-        BasicCookieStore cookieStore = new BasicCookieStore();
-        httpContext = new BasicHttpContext();
-        httpContext.setAttribute(HttpClientContext.COOKIE_STORE, cookieStore);
-        httpClient = HttpClients.custom()
-                .setDefaultCookieStore(cookieStore)
-                .build();
-        httpContainer = new HttpContainer(httpClient, httpContext);
-
-        carregaCampos(map);
-
-        Integer dias = processaData();
-        String conteudoPagina = null;
-
-        if (dias > 31) {
-            for (int i = 0; i <= dataInicialMap.size(); i++) {
-                String periodoInicio = dataInicialMap.get(i);
-                String periodoFim = dataFinalMap.get(i);
-                conteudoPagina += realizarFiltro(httpContainer, periodoInicio, periodoFim);
-                geraArquivo(conteudoPagina);
-                Thread.sleep(30000);
-            }
-        } else {
-            DateTimeFormatter patternDate = DateTimeFormat.forPattern("dd/MM/yyyy");
-            DateTime dataInicial = new DateTime(new Date(periodoInicio));
-            DateTime dataFim = new DateTime(new Date(periodoFim));
-            String periodoInicio = dataInicial.toString(patternDate);
-            String periodoFim = dataFim.toString(patternDate);
-            conteudoPagina = realizarFiltro(httpContainer, periodoInicio, periodoFim);
-            geraArquivo(conteudoPagina);
-        }
+    public ParseadorTransparencia(Map<String, String> map) {
+        this.map = map;
     }
 
-    private static String realizarFiltro(HttpContainer httpContainer, String periodoInicio, String periodoFim) throws Exception {
+    @Override
+    public void run() {
+        try {
+            BasicCookieStore cookieStore = new BasicCookieStore();
+            httpContext = new BasicHttpContext();
+            httpContext.setAttribute(HttpClientContext.COOKIE_STORE, cookieStore);
+            httpClient = HttpClients.custom()
+                    .setDefaultCookieStore(cookieStore)
+                    .build();
+            httpContainer = new HttpContainer(httpClient, httpContext);
+
+            carregaCampos(map);
+
+            String conteudoPagina = null;
+            Integer dias;
+
+            dias = processaData();
+            if (dias > 31) {
+                for (int i = 0; i <= dataInicialMap.size(); i++) {
+                    String periodoInicio = dataInicialMap.get(i);
+                    String periodoFim = dataFinalMap.get(i);
+                    conteudoPagina += realizarFiltro(httpContainer, periodoInicio, periodoFim);
+                    geraArquivo(conteudoPagina);
+                    Thread.sleep(30000);
+                }
+            } else {
+                DateTimeFormatter patternDate = DateTimeFormat.forPattern("dd/MM/yyyy");
+                DateTime dataInicial = new DateTime(new Date(periodoInicio));
+                DateTime dataFim = new DateTime(new Date(periodoFim));
+                String periodoInicio = dataInicial.toString(patternDate);
+                String periodoFim = dataFim.toString(patternDate);
+                conteudoPagina = realizarFiltro(httpContainer, periodoInicio, periodoFim);
+                geraArquivo(conteudoPagina);
+            }
+        } catch (ParseException ex) {
+            Logger.getLogger(ParseadorTransparencia.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception ex) {
+            Logger.getLogger(ParseadorTransparencia.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+    }
+
+    private String realizarFiltro(HttpContainer httpContainer, String periodoInicio, String periodoFim) throws Exception {
         String fontePagina = "";
         CloseableHttpClient httpClient = httpContainer.getHttpClient();
         HttpContext httpContext = httpContainer.getHttpContext();
@@ -117,7 +133,7 @@ public class ParseadorTransparencia {
         return fontePagina;
     }
 
-    private static Integer encontrarUltimaPagina(String fontePagina) throws Exception {
+    private Integer encontrarUltimaPagina(String fontePagina) throws Exception {
         Document doc = Jsoup.parse(fontePagina);
         Integer numMaxPagina;
         Element content = doc.getElementsByClass("ultimaPagina").first();
@@ -140,7 +156,7 @@ public class ParseadorTransparencia {
         return numMaxPagina;
     }
 
-    private static List<String> buscarDocumentosDaPagina(CloseableHttpClient httpClient, HttpContext httpContext, Integer pagina) throws Exception {
+    private List<String> buscarDocumentosDaPagina(CloseableHttpClient httpClient, HttpContext httpContext, Integer pagina) throws Exception {
         String linkComum = "http://www.portaltransparencia.gov.br/despesasdiarias/";
         HttpGet httpGet = null;
         List<String> linksDocumentos = new ArrayList<>();
@@ -166,7 +182,7 @@ public class ParseadorTransparencia {
         return linksDocumentos;
     }
 
-    private static String parsearDetalhesDocumento(HttpContainer httpContainer, String linkDocumento) throws Exception {
+    private String parsearDetalhesDocumento(HttpContainer httpContainer, String linkDocumento) throws Exception {
         CloseableHttpClient httpClient = httpContainer.getHttpClient();
         HttpContext httpContext = httpContainer.getHttpContext();
         HttpGet httpGet = null;
@@ -191,6 +207,13 @@ public class ParseadorTransparencia {
                     if (i != 0) {
                         linha += "-###EOL###-";
                     }
+                }
+                if ((i + 5) % 5 == 1) {
+                    Double campoDouble = Double.valueOf(campo.text());
+                    campo.text(String.format("%.0f", campoDouble));
+                } else if ((i + 5) % 5 == 2 || (i + 5) % 5 == 3) {
+                    Double campoDouble = Double.valueOf(campo.text());
+                    campo.text(String.format("%.2f", campoDouble));
                 }
                 linha += StringEscapeUtils.unescapeHtml4("\"" + campo.html() + "\"") + ";";
                 i++;
@@ -218,7 +241,7 @@ public class ParseadorTransparencia {
         return linhaTitulo;
     }
 
-    private static void carregaCampos(Map<String, String> map) {
+    private void carregaCampos(Map<String, String> map) {
         periodoInicio = map.get("periodoInicio");
         periodoFim = map.get("periodoFim");
         codigoOS = (map.get("codigoOS") == null || map.get("codigoOS").equals("") ? "TOD" : map.get("codigoOS"));
@@ -227,11 +250,9 @@ public class ParseadorTransparencia {
         codigoED = map.get("codigoED");
         codigoFavorecido = (map.get("codigoFavorecido") == null ? "" : map.get("codigoFavorecido"));
         nomeArquivo = (map.get("nomeArquivo") == null || map.get("nomeArquivo").equals("") ? "novoArquivo" : map.get("nomeArquivo"));
-        System.out.println("Nome do arquivo depois de enviar: " + map.get("nomeArquivo"));
-        System.out.println("Nome do arquivo depois de enviar armazenado: " + nomeArquivo);
     }
 
-    private static int processaData() throws ParseException {
+    private int processaData() throws ParseException {
         DateTime dataInicial = new DateTime(new Date(periodoInicio));
         DateTime dataFinal = new DateTime(new Date(periodoFim));
         DateTimeFormatter patternDate = DateTimeFormat.forPattern("dd/MM/yyyy");
@@ -265,12 +286,12 @@ public class ParseadorTransparencia {
         return dias;
     }
 
-    private static void geraArquivo(String conteudoPagina) throws Exception {
+    private void geraArquivo(String conteudoPagina) throws Exception {
         Integer ultimaPaginaResultado = encontrarUltimaPagina(conteudoPagina);
         System.out.println("Quantidade de páginas: " + encontrarUltimaPagina(conteudoPagina));
         List<String> listaLinksDocumentos;
         List<String> listaDespesasDocumento = new ArrayList<>();
-        
+
         listaDespesasDocumento.add("Subitem da Despesa;Quantidade;Valor Unitário (R$);Valor Total (R$);Descrição");
 
         for (int i = 1; i <= ultimaPaginaResultado; i++) {
@@ -281,19 +302,18 @@ public class ParseadorTransparencia {
                 String linha = parsearDetalhesDocumento(httpContainer, linkDocumento);
                 listaDespesasDocumento.addAll(Arrays.asList(linha.split("-###EOL###-")));
                 Thread.sleep(1000);
-            }           
-            
+            }
+
             for (String a : listaDespesasDocumento) {
                 System.out.println(a);
             }
-            
-            if(listaDespesasDocumento.size() == 1) {
+
+            if (listaDespesasDocumento.size() == 1) {
                 JOptionPane.showMessageDialog(null, "Essa consulta não retornou nenhum resultado.", "Sem resultados", JOptionPane.INFORMATION_MESSAGE);
-            } else {               
-                FileUtils.writeLines(new File(nomeArquivo + ".csv"), "UTF-8", listaDespesasDocumento, true);
+            } else {
+                FileUtils.writeLines(new File(nomeArquivo + ".csv"), "ISO8859_1", listaDespesasDocumento, true);
                 JOptionPane.showMessageDialog(null, "Arquivo gerado com sucesso!", "Arquivo gerado", JOptionPane.INFORMATION_MESSAGE);
             }
-                
         }
     }
 }

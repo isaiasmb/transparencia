@@ -15,6 +15,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.AnchorPane;
 import javafx.stage.Stage;
+import javax.swing.JOptionPane;
 import parseadortransparencia.ParseadorTransparencia;
 import utils.DadosPesquisa;
 
@@ -23,6 +24,7 @@ import utils.DadosPesquisa;
  * @author isaias
  */
 public class JanelaApp extends Application {
+
     private final DadosPesquisa dadosPesquisa = new DadosPesquisa();
     private final Map<String, String> elementosDespesaMap = dadosPesquisa.getElementoDespesaMap();
     private AnchorPane pane;
@@ -56,8 +58,7 @@ public class JanelaApp extends Application {
         // Dá um título para a tela
         stage.setTitle("Consulta - Portal transparência");
         stage.show();
-        initLayout();  
-        validaCampos();
+        initLayout();
     }
 
     private void initComponents() {
@@ -86,7 +87,7 @@ public class JanelaApp extends Application {
 
         favorecidoLabel = new Label("Favorecido:");
         favorecido = new TextField();
-        
+
         nomeArquivoLabel = new Label("Nome do arquivo: ");
         nomeArquivo = new TextField();
         nomeArquivo.setPromptText("Opcional");
@@ -99,7 +100,7 @@ public class JanelaApp extends Application {
 
         pane.getChildren().addAll(periodoLabel, periodoInicio, periodoFim, orgaoSuperiorLabel, orgaoSuperior,
                 orgaoEntidadeVinculadaLabel, orgaoEntidadeVinculada, unidadeGestora, unidadeGestoraLabel,
-                elementoDespesaCombo, elementoDespesaLabel, favorecido, favorecidoLabel, nomeArquivoLabel, nomeArquivo, 
+                elementoDespesaCombo, elementoDespesaLabel, favorecido, favorecidoLabel, nomeArquivoLabel, nomeArquivo,
                 consultar, limparCampos);
     }
 
@@ -135,7 +136,7 @@ public class JanelaApp extends Application {
         favorecidoLabel.setLayoutY(elementoDespesaLabel.getLayoutY() + 40);
         favorecido.setLayoutX(elementoDespesaCombo.getLayoutX());
         favorecido.setLayoutY(elementoDespesaCombo.getLayoutY() + 40);
-        
+
         nomeArquivoLabel.setLayoutX(favorecidoLabel.getLayoutX());
         nomeArquivoLabel.setLayoutY(favorecidoLabel.getLayoutY() + 40);
         nomeArquivo.setLayoutX(favorecido.getLayoutX());
@@ -149,23 +150,32 @@ public class JanelaApp extends Application {
     }
 
     private void consultar() {
-        String patternDate = "MM/dd/yyyy";
-        try {
-            Map<String, String> map = new HashMap<>();
-            map.put("periodoInicio", periodoInicio.getValue().format(DateTimeFormatter.ofPattern(patternDate)));
-            map.put("periodoFim", periodoFim.getValue().format(DateTimeFormatter.ofPattern(patternDate)));
-            map.put("codigoOS", orgaoSuperior.getText());
-            map.put("codigoOrgao", orgaoEntidadeVinculada.getText());
-            map.put("codigoUG", unidadeGestora.getText());
-            map.put("codigoED", getValue(elementosDespesaMap, elementoDespesaCombo));
-            map.put("codigoFavorecido", favorecido.getText());
-            map.put("nomeArquivo", nomeArquivo.getText());
-            System.out.println("Nome do favorecido antes de enviar: " + favorecido.getText());
-            System.out.println("Nome do arquivo antes de enviar: " + nomeArquivo.getText());
-           
-            ParseadorTransparencia.execute(map);
-        } catch (Exception ex) {
-            Logger.getLogger(JanelaApp.class.getName()).log(Level.SEVERE, null, ex);
+        if (validaCampos()) {
+            String patternDate = "MM/dd/yyyy";
+            try {
+                Map<String, String> map = new HashMap<>();
+                map.put("periodoInicio", periodoInicio.getValue().format(DateTimeFormatter.ofPattern(patternDate)));
+                map.put("periodoFim", periodoFim.getValue().format(DateTimeFormatter.ofPattern(patternDate)));
+                map.put("codigoOS", orgaoSuperior.getText());
+                map.put("codigoOrgao", orgaoEntidadeVinculada.getText());
+                map.put("codigoUG", unidadeGestora.getText());
+                map.put("codigoED", getValue(elementosDespesaMap, elementoDespesaCombo));
+                map.put("codigoFavorecido", favorecido.getText());
+                map.put("nomeArquivo", nomeArquivo.getText());
+
+                ParseadorTransparencia parceador = new ParseadorTransparencia(map);
+                Thread threadParceador = new Thread(parceador);
+                threadParceador.start();
+
+//                if (threadParceador.isAlive()) {
+//                    System.out.println("A thread não terminou!");
+//                } else {
+//                    System.out.println("A thread terminou!");
+//                }
+
+            } catch (Exception ex) {
+                Logger.getLogger(JanelaApp.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
     }
 
@@ -190,11 +200,17 @@ public class JanelaApp extends Application {
         elementoDespesaCombo.getSelectionModel().select(elementosDespesaMap.get("TOD"));
         favorecido.clear();
     }
-    
-    private void validaCampos() {
-//        if(orgaoSuperior.getText() == null || orgaoSuperior.getText().trim().equals("")){
-//            orgaoEntidadeVinculada.setEditable(false);
-//        }
+
+    private Boolean validaCampos() {
+        if (periodoInicio.getValue() == null || periodoFim.getValue() == null) {
+            JOptionPane.showMessageDialog(null, "Por favor informe o período inicial e o período final.", "Campo Obrigatório", JOptionPane.INFORMATION_MESSAGE);
+            return false;
+        } else if (periodoInicio.getValue().isAfter(periodoFim.getValue())) {
+            JOptionPane.showMessageDialog(null, "O período final precisa ser posterior ao período inicial.", "Data Incorreta", JOptionPane.INFORMATION_MESSAGE);
+            return false;
+        } else {
+            return true;
+        }
     }
 
     public static void main(String[] args) {
