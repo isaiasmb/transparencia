@@ -164,7 +164,7 @@ public class JanelaApp extends Application {
                 map.put("nomeArquivo", nomeArquivo.getText());
 
                 ParseadorTransparencia parceador = new ParseadorTransparencia(map);
-                Thread threadParceador = new Thread(parceador);
+                Thread threadParceador = new Thread(parceador, "Thread Parseador");
                 threadParceador.start();
 
 //                if (threadParceador.isAlive()) {

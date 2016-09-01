@@ -11,6 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javafx.concurrent.Task;
+import javafx.scene.control.ProgressIndicator;
+import javafx.scene.layout.HBox;
+import javafx.stage.Stage;
 import javax.swing.JOptionPane;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
@@ -47,13 +51,15 @@ public class ParseadorTransparencia implements Runnable {
     private String codigoUG;
     private String codigoED;
     private String codigoFavorecido;
-    private Map<Integer, String> dataInicialMap = new LinkedHashMap<>();
-    private Map<Integer, String> dataFinalMap = new LinkedHashMap<>();
     private HttpContainer httpContainer;
     private CloseableHttpClient httpClient;
     private HttpContext httpContext;
     private String nomeArquivo;
-    private Map<String, String> map;
+    private Integer contadorPeriodos = 0;
+    private final Map<String, String> map;
+    private final Map<Integer, String> dataInicialMap = new LinkedHashMap<>();
+    private final Map<Integer, String> dataFinalMap = new LinkedHashMap<>();
+    private final List<String> listaDespesasDocumento = new ArrayList<>();
 
     public ParseadorTransparencia(Map<String, String> map) {
         this.map = map;
@@ -76,13 +82,16 @@ public class ParseadorTransparencia implements Runnable {
             Integer dias;
 
             dias = processaData();
-            if (dias > 31) {
-                for (int i = 0; i <= dataInicialMap.size(); i++) {
-                    String periodoInicio = dataInicialMap.get(i);
-                    String periodoFim = dataFinalMap.get(i);
-                    conteudoPagina += realizarFiltro(httpContainer, periodoInicio, periodoFim);
-                    geraArquivo(conteudoPagina);
-                    Thread.sleep(30000);
+            if (dias > 30) {
+                System.out.println("Quantidade de meses: " + dataInicialMap.size());
+                for (int i = 0; i < dataInicialMap.size(); i++) {
+                    if (dataInicialMap.get(i) != null) {
+                        String periodoInicio = dataInicialMap.get(i);
+                        String periodoFim = dataFinalMap.get(i);
+                        conteudoPagina = realizarFiltro(httpContainer, periodoInicio, periodoFim);
+                        Thread.sleep(30000);
+                        geraArquivo(conteudoPagina, dataInicialMap.size());
+                    }
                 }
             } else {
                 DateTimeFormatter patternDate = DateTimeFormat.forPattern("dd/MM/yyyy");
@@ -91,7 +100,7 @@ public class ParseadorTransparencia implements Runnable {
                 String periodoInicio = dataInicial.toString(patternDate);
                 String periodoFim = dataFim.toString(patternDate);
                 conteudoPagina = realizarFiltro(httpContainer, periodoInicio, periodoFim);
-                geraArquivo(conteudoPagina);
+                geraArquivo(conteudoPagina, 1);
             }
         } catch (ParseException ex) {
             Logger.getLogger(ParseadorTransparencia.class.getName()).log(Level.SEVERE, null, ex);
@@ -136,23 +145,26 @@ public class ParseadorTransparencia implements Runnable {
     private Integer encontrarUltimaPagina(String fontePagina) throws Exception {
         Document doc = Jsoup.parse(fontePagina);
         Integer numMaxPagina;
-        Element content = doc.getElementsByClass("ultimaPagina").first();
+        Element content = doc.getElementsByClass("paginaXdeN").first();
 
         if (content == null) {
             numMaxPagina = 1;
         } else {
-            Element link = content.getElementsByTag("a").first();
-            String linkUltimaPg = link.attr("href");
-            int posInicial = linkUltimaPg.indexOf("=");
-            int posFinal = linkUltimaPg.indexOf("#");
-            String numMaxPaginaStr = linkUltimaPg.substring(posInicial + 1, posFinal);
-
+            System.out.println("Elemento: " + content.toString());
+            String texto = content.toString();
+            int posInicial = texto.indexOf("Página 1 de");
+            System.out.println("Índice 1: " + posInicial);
+            int posFinal = texto.indexOf("</span>");
+            System.out.println("Índice 2: " + posFinal);
+            String numMaxPaginaStr = texto.substring(posInicial + 12, posFinal);
+            System.out.println("QTD PÁGINAS: " + numMaxPaginaStr);
             try {
                 numMaxPagina = Integer.parseInt(numMaxPaginaStr);
             } catch (NumberFormatException ex) {
                 throw new Exception(ex);
             }
         }
+
         return numMaxPagina;
     }
 
@@ -258,26 +270,30 @@ public class ParseadorTransparencia implements Runnable {
         DateTimeFormatter patternDate = DateTimeFormat.forPattern("dd/MM/yyyy");
         int dias = Days.daysBetween(dataInicial, dataFinal).getDays();
 
-        if (dias > 31) {
-            int diasMes = dias / 31;
-            int diasMesResto = dias % 31;
+        if (dias > 30) {
+            int diasMes = dias / 30;
+            int diasMesResto = dias % 30;
 
             dataInicialMap.put(0, dataInicial.toString(patternDate));
-            dataFinalMap.put(0, dataInicial.plusDays(31).toString(patternDate));
+            dataFinalMap.put(0, dataInicial.plusDays(30).toString(patternDate));
 
             for (int i = 1; i <= diasMes; i++) {
-                System.out.println("Mês: " + i);
-
-                DateTime dataInicialItemMap = new DateTime(dataInicial.plusDays((31 * i) + 1));
-                String dataIcialFormatada = dataInicialItemMap.toString(patternDate);
-                dataInicialMap.put(i, dataIcialFormatada);
 
                 if (i < diasMes) {
-                    DateTime dataFinalItemMap = new DateTime(dataInicial.plusDays((31 * i) + 31));
+                    DateTime dataInicialItemMap = new DateTime(dataInicial.plusDays((30 * i) + 1));
+                    String dataIcialFormatada = dataInicialItemMap.toString(patternDate);
+                    dataInicialMap.put(i, dataIcialFormatada);
+
+                    DateTime dataFinalItemMap = new DateTime(dataInicial.plusDays((30 * i) + 30));
                     String dataFinalFormatada = dataFinalItemMap.toString(patternDate);
                     dataFinalMap.put(i, dataFinalFormatada);
-                } else {
-                    DateTime dataFinalItemMap = new DateTime(dataInicial.plusDays((31 * i) + diasMesResto));
+
+                } else if (diasMesResto > 0) {
+                    DateTime dataInicialItemMap = new DateTime(dataInicial.plusDays((30 * i) + 1));
+                    String dataIcialFormatada = dataInicialItemMap.toString(patternDate);
+                    dataInicialMap.put(i, dataIcialFormatada);
+
+                    DateTime dataFinalItemMap = new DateTime(dataInicial.plusDays((30 * i) + diasMesResto));
                     String dataFinalFormatada = dataFinalItemMap.toString(patternDate);
                     dataFinalMap.put(i, dataFinalFormatada);
                 }
@@ -286,33 +302,37 @@ public class ParseadorTransparencia implements Runnable {
         return dias;
     }
 
-    private void geraArquivo(String conteudoPagina) throws Exception {
+    private void geraArquivo(String conteudoPagina, Integer qtdPeriodos) throws Exception {
         Integer ultimaPaginaResultado = encontrarUltimaPagina(conteudoPagina);
         System.out.println("Quantidade de páginas: " + encontrarUltimaPagina(conteudoPagina));
         List<String> listaLinksDocumentos;
-        List<String> listaDespesasDocumento = new ArrayList<>();
+        contadorPeriodos++;
 
-        listaDespesasDocumento.add("Subitem da Despesa;Quantidade;Valor Unitário (R$);Valor Total (R$);Descrição");
+        if (listaDespesasDocumento.isEmpty()) {
+            listaDespesasDocumento.add("Subitem da Despesa;Quantidade;Valor Unitário (R$);Valor Total (R$);Descrição");
+        }
 
         for (int i = 1; i <= ultimaPaginaResultado; i++) {
+            listaLinksDocumentos = new ArrayList<>();
             System.out.println("---> " + i);
-            listaLinksDocumentos = buscarDocumentosDaPagina(httpClient, httpContext, i);
+            listaLinksDocumentos.addAll(buscarDocumentosDaPagina(httpClient, httpContext, i));
             for (String linkDocumento : listaLinksDocumentos) {
                 System.out.println("-----> " + linkDocumento);
                 String linha = parsearDetalhesDocumento(httpContainer, linkDocumento);
                 listaDespesasDocumento.addAll(Arrays.asList(linha.split("-###EOL###-")));
-                Thread.sleep(1000);
+                Thread.sleep(2000);
             }
 
-            for (String a : listaDespesasDocumento) {
-                System.out.println(a);
-            }
-
-            if (listaDespesasDocumento.size() == 1) {
-                JOptionPane.showMessageDialog(null, "Essa consulta não retornou nenhum resultado.", "Sem resultados", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                FileUtils.writeLines(new File(nomeArquivo + ".csv"), "ISO8859_1", listaDespesasDocumento, true);
-                JOptionPane.showMessageDialog(null, "Arquivo gerado com sucesso!", "Arquivo gerado", JOptionPane.INFORMATION_MESSAGE);
+            if (contadorPeriodos == qtdPeriodos) {
+                if (listaDespesasDocumento.size() == 1) {
+                    JOptionPane.showMessageDialog(null, "Essa consulta não retornou nenhum resultado.", "Sem resultados", JOptionPane.INFORMATION_MESSAGE);
+                } else if (listaDespesasDocumento.size() > 1 && i == ultimaPaginaResultado) {
+                    for (String a : listaDespesasDocumento) {
+                        System.out.println(a);
+                    }
+                    FileUtils.writeLines(new File(nomeArquivo + ".csv"), "ISO8859_1", listaDespesasDocumento, true);
+                    JOptionPane.showMessageDialog(null, "Arquivo gerado com sucesso!", "Arquivo gerado", JOptionPane.INFORMATION_MESSAGE);
+                }
             }
         }
     }
